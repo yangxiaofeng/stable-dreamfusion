@@ -30,6 +30,23 @@ git clone https://github.com/ashawkey/stable-dreamfusion.git
 cd stable-dreamfusion
 ```
 
+### Optional: create a python virtual environment
+
+To avoid python package conflicts, we recommend using a virtual environment, e.g.: using conda or venv: 
+
+```bash
+python -m venv venv_stable-dreamfusion
+source venv_stable-dreamfusion/bin/activate # you need to repeat this step for every new terminal
+```
+
+### Install with pip
+
+```bash
+pip install -r requirements.txt
+```
+
+### Download pre-trained models
+
 To use image-conditioned 3D generation, you need to download some pretrained checkpoints manually:
 * [Zero-1-to-3](https://github.com/cvlab-columbia/zero123) for diffusion backend.
     We use `105000.ckpt` by default, and it is hard-coded in `guidance/zero123_utils.py`.
@@ -40,21 +57,19 @@ To use image-conditioned 3D generation, you need to download some pretrained che
 * [Omnidata](https://github.com/EPFL-VILAB/omnidata/tree/main/omnidata_tools/torch) for depth and normal prediction. 
     These ckpts are hardcoded in `preprocess_image.py`.
     ```bash
+    mkdir pretrained/omnidata
     cd pretrained/omnidata
     # assume gdown is installed
     gdown '1Jrh-bRnJEjyMCS7f-WsaFlccfPjJPPHI&confirm=t' # omnidata_dpt_depth_v2.ckpt
     gdown '1wNxVO4vVbDEMEpnAi_jwQObf2MFodcBR&confirm=t' # omnidata_dpt_normal_v2.ckpt
     ```
 
-### Install with pip
-```bash
-pip install -r requirements.txt
-```
-
 ### Build extension (optional)
 By default, we use [`load`](https://pytorch.org/docs/stable/cpp_extension.html#torch.utils.cpp_extension.load) to build the extension at runtime.
 We also provide the `setup.py` to build each extension:
 ```bash
+cd stable-dreamfusion
+
 # install all extension modules
 bash scripts/install_ext.sh
 
@@ -96,8 +111,12 @@ python main.py --text "a hamburger" --workspace trial -O
 # reduce stable-diffusion memory usage with `--vram_O` 
 # enable various vram savings (https://huggingface.co/docs/diffusers/optimization/fp16).
 python main.py --text "a hamburger" --workspace trial -O --vram_O
+
 # this makes it possible to train with larger rendering resolution, which leads to better quality (see https://github.com/ashawkey/stable-dreamfusion/pull/174)
 python main.py --text "a hamburger" --workspace trial -O --vram_O --w 300 --h 300 # Tested to run fine on 8GB VRAM (Nvidia 3070 Ti).
+
+# You can collect arguments in a file. You can override arguments by specifying them after `--file`. Note that quoted strings can't be loaded from .args files...
+python main.py --file scripts/res64.args --workspace trial_awesome_hamburger --text "a photo of an awesome hamburger"
 
 # use CUDA-free Taichi backend with `--backbone grid_taichi`
 python3 main.py --text "a hamburger" --workspace trial -O --backbone grid_taichi
@@ -166,6 +185,12 @@ python main.py -O --image hamburger_rgba.png --text "a DSLR photo of a delicious
 ## test / visualize
 python main.py -O --image <image>_rgba.png --workspace trial_image_dmtet --dmtet --test --save_mesh
 python main.py -O --image <image>_rgba.png --workspace trial_image_dmtet --dmtet --test --gui
+
+### Debugging
+
+# Can save guidance images for debugging purposes. These get saved in trial_hamburger/guidance.
+# Warning: this slows down training considerably and consumes lots of disk space!
+python main.py --text "a hamburger" --workspace trial_hamburger -O --vram_O --save_guidance --save_guidance_interval 5 # save every 5 steps
 ```
 
 For advanced tips and other developing stuff, check [Advanced Tips](./assets/advanced.md).
