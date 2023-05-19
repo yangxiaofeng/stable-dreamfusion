@@ -249,7 +249,13 @@ class Trainer(object):
             if opt.image_config is not None:
                 shutil.copyfile(opt.image_config, os.path.join(self.workspace, os.path.basename(opt.image_config)))
 
+            # Save a copy of images in the experiment workspace
+            if opt.images is not None:
+                for image_file in opt.images:
+                    shutil.copyfile(image_file, os.path.join(self.workspace, os.path.basename(image_file)))
+
         self.log(f'[INFO] Cmdline: {self.argv}')
+        self.log(f'[INFO] opt: {self.opt}')
         self.log(f'[INFO] Trainer: {self.name} | {self.time_stamp} | {self.device} | {"fp16" if self.fp16 else "fp32"} | {self.workspace}')
         self.log(f'[INFO] #parameters: {sum([p.numel() for p in model.parameters() if p.requires_grad])}')
 
@@ -374,9 +380,13 @@ class Trainer(object):
         if do_rgbd_loss:
             data = self.default_view_data
 
+        # experiment iterations ratio
+        # i.e. what proportion of this experiment have we completed (in terms of iterations) so far?
+        exp_iter_ratio = (self.global_step - self.opt.exp_start_iter) / (self.opt.exp_end_iter - self.opt.exp_start_iter)
+
         # progressively relaxing view range
         if self.opt.progressive_view:
-            r = min(1.0, 0.2 + self.global_step / (0.5 * self.opt.iters))
+            r = min(1.0, 0.2 + 2.0*exp_iter_ratio)
             self.opt.phi_range = [self.opt.default_azimuth * (1 - r) + self.opt.full_phi_range[0] * r,
                                   self.opt.default_azimuth * (1 - r) + self.opt.full_phi_range[1] * r]
             self.opt.theta_range = [self.opt.default_polar * (1 - r) + self.opt.full_theta_range[0] * r,
@@ -388,7 +398,7 @@ class Trainer(object):
 
         # progressively increase max_level
         if self.opt.progressive_level:
-            self.model.max_level = min(1.0, 0.25 + self.global_step / (0.5 * self.opt.iters))
+            self.model.max_level = min(1.0, 0.25 + 2.0*exp_iter_ratio)
 
         rays_o = data['rays_o'] # [B, N, 3]
         rays_d = data['rays_d'] # [B, N, 3]
@@ -419,7 +429,7 @@ class Trainer(object):
                 rays_o = rays_o + torch.randn(3, device=self.device) * noise_scale
                 rays_d = rays_d + torch.randn(3, device=self.device) * noise_scale
 
-        elif self.global_step < (self.opt.latent_iter_ratio * self.opt.iters):
+        elif exp_iter_ratio <= self.opt.latent_iter_ratio:
             ambient_ratio = 1.0
             shading = 'normal'
             as_latent = True
@@ -427,14 +437,14 @@ class Trainer(object):
             bg_color = None
 
         else:
-            if self.global_step < (self.opt.albedo_iter_ratio * self.opt.iters):
+            if exp_iter_ratio <= self.opt.albedo_iter_ratio:
                 ambient_ratio = 1.0
                 shading = 'albedo'
             else:
                 # random shading
-                ambient_ratio = 0.1 + 0.9 * random.random()
+                ambient_ratio = self.opt.min_ambient_ratio + (1.0-self.opt.min_ambient_ratio) * random.random()
                 rand = random.random()
-                if rand > 0.8:
+                if rand >= (1.0 - self.opt.textureless_ratio):
                     shading = 'textureless'
                 else:
                     shading = 'lambertian'

@@ -50,13 +50,13 @@ def visualize_poses(poses, dirs, size=0.1):
     trimesh.Scene(objects).show()
 
 def get_view_direction(thetas, phis, overhead, front):
-    #                   phis [B,];          thetas: [B,]
-    # front = 0         [0, front)
-    # side (right) = 1   [front, 180)
-    # back = 2          [180, 180+front)
-    # side (left) = 3  [180+front, 360)
-    # top = 4                               [0, overhead]
-    # bottom = 5                            [180-overhead, 180]
+    #                   phis: [B,];          thetas: [B,]
+    # front = 0             [-front/2, front/2)
+    # side (cam left) = 1   [front/2, 180-front/2)
+    # back = 2              [180-front/2, 180+front/2)
+    # side (cam right) = 3  [180+front/2, 360-front/2)
+    # top = 4               [0, overhead]
+    # bottom = 5            [180-overhead, 180]
     res = torch.zeros(thetas.shape[0], dtype=torch.long)
     # first determine by phis
     phis = phis % (2 * np.pi)
@@ -92,9 +92,9 @@ def rand_poses(size, device, opt, radius_range=[1, 1.5], theta_range=[0, 120], p
     if random.random() < uniform_sphere_rate:
         unit_centers = F.normalize(
             torch.stack([
-                (torch.rand(size, device=device) - 0.5) * 2.0,
-                torch.rand(size, device=device),
-                (torch.rand(size, device=device) - 0.5) * 2.0,
+                torch.randn(size, device=device),
+                torch.abs(torch.randn(size, device=device)),
+                torch.randn(size, device=device),
             ], dim=-1), p=2, dim=1
         )
         thetas = torch.acos(unit_centers[:,1])
@@ -258,8 +258,8 @@ class NeRFDataset:
 
         elif self.type == 'six_views':
             # six views
-            thetas_six = [90]*4 + [1e-6] + [180]
-            phis_six = [0, 90, 180, -90, 0, 0]
+            thetas_six = [90, 90,  90,  90, 1e-3, 179.999]
+            phis_six =   [ 0, 90, 180, -90,    0,       0]
             thetas = torch.FloatTensor([thetas_six[index[0]]]).to(self.device)
             phis = torch.FloatTensor([phis_six[index[0]]]).to(self.device)
             radius = torch.FloatTensor([self.opt.default_radius]).to(self.device)
